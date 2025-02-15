@@ -139,18 +139,23 @@ class CBSState:
         """
         Computes the cost of a CBS state. Assumes the sum of the cost of the paths as the objective function.
         """
-        astar_solver = AStar(self._map)
-        self._cost = 0
-        paths_update = {}
-        for agent_id, (start, goal) in enumerate(zip(self._starts, self._goals)):
-            cost, path = astar_solver.search(start, goal, self._constraints[agent_id])
-            if path is None:
-                self._cost = float('inf')
-                return self._cost, {}
-            self._cost += cost
-            paths_update[agent_id] = path
-        self._paths = paths_update
-        return self._cost, self._paths
+        astar = AStar(self._map)
+        total_cost = 0  # initialize the total cost
+        updated_paths = {}
+
+        for i, (start, goal) in enumerate(zip(self._starts, self._goals)):  # iterate over agents
+            path_cost, path = astar.search(start, goal, self._constraints[i])
+            
+            if path is None: 
+                self._cost = float('inf')  # mark as infeasible
+                return self._cost, {}  
+            
+            total_cost += path_cost 
+            updated_paths[i] = path  # store path for agent i
+
+        self._cost = total_cost  # update the state's total cost
+        self._paths = updated_paths  
+        return self._cost, self._paths 
 
     
     def is_solution(self):
@@ -180,7 +185,7 @@ class CBSState:
         has_conflict, (conflict_state, conflict_time, agent_a, agent_b) = self.is_solution()
 
         if has_conflict:  # return empty tuple if no conflict is found
-            return (0, 0)
+            return []
 
         node_a = CBSState(self._map, self._starts, self._goals)  # create first child
         node_a._constraints = copy.deepcopy(self._constraints)  # copy constraints
