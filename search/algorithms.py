@@ -139,20 +139,58 @@ class CBSState:
         """
         Computes the cost of a CBS state. Assumes the sum of the cost of the paths as the objective function.
         """
-        pass
+        astar_solver = AStar(self._map)
+        self._cost = 0
+        paths_update = {}
+        for agent_id, (start, goal) in enumerate(zip(self._starts, self._goals)):
+            cost, path = astar_solver.search(start, goal, self._constraints[agent_id])
+            if path is None:
+                self._cost = float('inf')
+                return self._cost, {}
+            self._cost += cost
+            paths_update[agent_id] = path
+        self._paths = paths_update
+        return self._cost, self._paths
+
     
     def is_solution(self):
         """
         Verifies whether a CBS state is a solution. If it isn't, it returns False and a tuple with 
         the conflicting state and time step; returns True, None otherwise. 
         """
-        pass
+        max_steps = max(len(path) for path in self._paths.values())  # find longest path
+        occupied_pos = {}  # track agent positions at each step
+        
+        for agent, path in self._paths.items():
+            for time in range(max_steps):
+                if time < len(path):
+                    position = path[time]
+                    
+                    if (time, position) in occupied_pos:  # check for conflict
+                        return False, (position, time, occupied_pos[(time, position)], agent)
+                    
+                    occupied_pos[(time, position)] = agent  # occupied position
+        
+        return True, (None, None, None, None)
 
     def successors(self):
         """
         Generates the two children of a CBS state that doesn't represent a solution.
         """
-        pass
+        has_conflict, (conflict_state, conflict_time, agent_a, agent_b) = self.is_solution()
+
+        if has_conflict:  # return empty tuple if no conflict is found
+            return (0, 0)
+
+        node_a = CBSState(self._map, self._starts, self._goals)  # create first child
+        node_a._constraints = copy.deepcopy(self._constraints)  # copy constraints
+        node_a.set_constraint(conflict_state, conflict_time, agent_a)  # add constraint for agent a
+
+        node_b = CBSState(self._map, self._starts, self._goals)  # create second child
+        node_b._constraints = copy.deepcopy(self._constraints)  # copy constraints
+        node_b.set_constraint(conflict_state, conflict_time, agent_b)  # add constraint for agent b
+
+        return node_a, node_b  # return the two children
 
     def set_constraint(self, conflict_state, conflict_time, agent):
         """
@@ -186,7 +224,27 @@ class CBS():
         """
         Performs CBS search for the problem defined in start.
         """
-        return None, None
+        state = start
+        total_cost, _ = state.compute_cost()  # get initial cost
+
+        if total_cost == float('inf'):  # check if the initial state is unsolvable
+            return None, total_cost
+    
+        open_list = [(total_cost, state)]
+
+        while open_list:
+            _, state = heapq.heappop(open_list)
+            
+            if state.is_solution()[0]:  # check if we found a valid solution
+                return state._paths, state.get_cost()
+            
+            for next_state in state.successors():
+                next_cost, _ = next_state.compute_cost()  # compute cost for the new state
+                
+                if next_cost < float('inf'):  # check if valid
+                    heapq.heappush(open_list, (next_cost, next_state))
+
+        return None, float('inf')  #if queue empty, return None
         
 class AStar():
 
